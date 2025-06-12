@@ -1,0 +1,2768 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enhanced World Population Density Map with Sidebars</title>
+    
+    <!-- External Dependencies -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --secondary-color: #64748b;
+            --accent-color: #f59e0b;
+            --success-color: #10b981;
+            --error-color: #ef4444;
+            --warning-color: #f97316;
+            --background-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --glass-bg: rgba(255, 255, 255, 0.15);
+            --glass-border: rgba(255, 255, 255, 0.25);
+            --shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
+            --text-primary: #1e293b;
+            --text-secondary: #64748b;
+            --text-light: #ffffff;
+            --sidebar-width: 320px;
+            --header-height: 70px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--background-gradient);
+            height: 100vh;
+            overflow: hidden;
+            color: var(--text-primary);
+        }
+
+        .app-container {
+            display: flex;
+            height: 100vh;
+            position: relative;
+        }
+
+        /* Enhanced Header */
+        .header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: var(--header-height);
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(25px);
+            border-bottom: 2px solid rgba(0, 0, 0, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 30px;
+            z-index: 2000;
+            color: #1e293b;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 22px;
+            font-weight: 700;
+            color: #1e293b;
+        }
+
+        .logo i {
+            font-size: 28px;
+            color: var(--accent-color);
+        }
+
+        .header-info {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            font-size: 14px;
+            color: #1e293b;
+            font-weight: 600;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 12px;
+            background: rgba(16, 185, 129, 0.2);
+            border: 1px solid rgba(16, 185, 129, 0.5);
+            border-radius: 20px;
+            color: #065f46;
+            font-weight: 600;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--success-color);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Control Panel (Main Sidebar) */
+        .control-panel {
+            width: 420px;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(25px);
+            border-right: 2px solid rgba(0, 0, 0, 0.1);
+            padding: calc(var(--header-height) + 20px) 25px 25px;
+            overflow-y: auto;
+            z-index: 1000;
+            transition: transform 0.4s ease;
+            box-shadow: 4px 0 20px rgba(0, 0, 0, 0.1);
+            color: #1e293b;
+        }
+
+        .control-panel.hidden {
+            transform: translateX(-100%);
+        }
+
+        /* Panel Toggle Button */
+        .panel-toggle {
+            position: fixed;
+            top: calc(var(--header-height) + 10px);
+            left: 430px;
+            width: 50px;
+            height: 50px;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(15px);
+            border: 2px solid rgba(0, 0, 0, 0.1);
+            border-radius: 50%;
+            cursor: pointer;
+            z-index: 1001;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #1e293b;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .panel-toggle:hover {
+            background: rgba(255, 255, 255, 1);
+            transform: scale(1.1);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+        }
+
+        .control-panel.hidden + .panel-toggle {
+            left: 20px;
+        }
+
+        /* Map Container */
+        .map-container {
+            flex: 1;
+            position: relative;
+            margin-top: var(--header-height);
+        }
+
+        #map {
+            height: 100%;
+            width: 100%;
+        }
+
+        /* Enhanced Sidebar Panels - FIXED FLICKERING ISSUE */
+        .sidebar-panel {
+            position: fixed;
+            width: var(--sidebar-width);
+            height: calc(100vh - var(--header-height));
+            top: var(--header-height);
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(25px);
+            border: 2px solid rgba(0, 0, 0, 0.1);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+            z-index: 1000;
+            color: #1e293b;
+            /* FIXED: Removed problematic cubic-bezier and set proper initial state */
+            transition: transform 0.3s ease-in-out;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            /* FIXED: Set proper initial transform state */
+            transform: translateX(100%);
+            visibility: hidden;
+        }
+
+        /* Right Sidebar */
+        .sidebar-panel.right {
+            right: 0;
+            border-left: 2px solid rgba(0, 0, 0, 0.1);
+            border-right: none;
+        }
+
+        /* FIXED: Better open state management */
+        .sidebar-panel.open {
+            transform: translateX(0);
+            visibility: visible;
+        }
+
+        /* Left Sidebar (for additional features) */
+        .sidebar-panel.left {
+            left: 0;
+            border-right: 2px solid rgba(0, 0, 0, 0.1);
+            border-left: none;
+            transform: translateX(-100%);
+        }
+
+        .sidebar-panel.left.open {
+            transform: translateX(0);
+            visibility: visible;
+        }
+
+        /* Sidebar Header */
+        .sidebar-header {
+            padding: 20px 25px;
+            border-bottom: 2px solid rgba(0, 0, 0, 0.1);
+            background: rgba(255, 255, 255, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            min-height: 80px;
+        }
+
+        .sidebar-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #1e293b;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .sidebar-close {
+            width: 40px;
+            height: 40px;
+            border: none;
+            background: rgba(0, 0, 0, 0.1);
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #1e293b;
+            transition: all 0.2s ease;
+            font-size: 16px;
+        }
+
+        .sidebar-close:hover {
+            background: rgba(0, 0, 0, 0.2);
+            transform: scale(1.1);
+        }
+
+        /* Sidebar Content */
+        .sidebar-content {
+            flex: 1;
+            padding: 25px;
+            overflow-y: auto;
+        }
+
+        /* Floating Action Buttons - FIXED positioning */
+        .floating-buttons {
+            position: fixed;
+            right: 20px;
+            top: calc(var(--header-height) + 20px);
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            z-index: 999;
+            /* FIXED: Smooth transition for repositioning */
+            transition: right 0.3s ease-in-out;
+        }
+
+        .floating-btn {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            border: none;
+            background: linear-gradient(135deg, var(--primary-color), #1d4ed8);
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            box-shadow: 0 6px 20px rgba(37, 99, 235, 0.3);
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .floating-btn:hover {
+            transform: translateY(-3px) scale(1.05);
+            box-shadow: 0 8px 25px rgba(37, 99, 235, 0.4);
+        }
+
+        .floating-btn.secondary {
+            background: linear-gradient(135deg, var(--secondary-color), #475569);
+            box-shadow: 0 6px 20px rgba(100, 116, 139, 0.3);
+        }
+
+        .floating-btn.success {
+            background: linear-gradient(135deg, var(--success-color), #059669);
+            box-shadow: 0 6px 20px rgba(16, 185, 129, 0.3);
+        }
+
+        .floating-btn.warning {
+            background: linear-gradient(135deg, var(--warning-color), #ea580c);
+            box-shadow: 0 6px 20px rgba(249, 115, 22, 0.3);
+        }
+
+        /* Tooltip for floating buttons */
+        .floating-btn::before {
+            content: attr(data-tooltip);
+            position: absolute;
+            right: 70px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            white-space: nowrap;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+            pointer-events: none;
+        }
+
+        .floating-btn:hover::before {
+            opacity: 1;
+            visibility: visible;
+            right: 75px;
+        }
+
+        /* FIXED: Better sidebar open state management */
+        body.sidebar-open .floating-buttons {
+            right: calc(var(--sidebar-width) + 20px);
+        }
+
+        /* Panel Section Styles (for sidebar content) */
+        .panel-section {
+            background: rgba(255, 255, 255, 0.98);
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 25px;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
+            border: 1px solid rgba(0, 0, 0, 0.05);
+            transition: all 0.3s ease;
+            color: #1e293b;
+        }
+
+        .panel-section:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.12);
+        }
+
+        .panel-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            border-bottom: 2px solid #e5e7eb;
+            padding-bottom: 10px;
+        }
+
+        .panel-title i {
+            color: var(--primary-color);
+            font-size: 20px;
+        }
+
+        /* Form Styles */
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .form-label i {
+            color: var(--secondary-color);
+            font-size: 14px;
+        }
+
+        .form-input, .form-select {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e2e8f0;
+            border-radius: 10px;
+            font-size: 14px;
+            transition: all 0.3s ease;
+            background: white;
+            font-family: inherit;
+        }
+
+        .form-input:focus, .form-select:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
+            transform: translateY(-1px);
+        }
+
+        /* Button Styles */
+        .btn {
+            background: linear-gradient(135deg, var(--primary-color), #1d4ed8);
+            color: white;
+            border: none;
+            padding: 14px 24px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 700;
+            transition: all 0.3s ease;
+            width: 100%;
+            margin: 10px 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            box-shadow: 0 4px 15px rgba(37, 99, 235, 0.3);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(37, 99, 235, 0.4);
+        }
+
+        .btn.secondary {
+            background: linear-gradient(135deg, var(--secondary-color), #475569);
+            box-shadow: 0 4px 15px rgba(100, 116, 139, 0.3);
+        }
+
+        .btn.success {
+            background: linear-gradient(135deg, var(--success-color), #059669);
+            box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
+        }
+
+        .btn.warning {
+            background: linear-gradient(135deg, var(--warning-color), #ea580c);
+            box-shadow: 0 4px 15px rgba(249, 115, 22, 0.3);
+        }
+
+        /* Stats Item Styles */
+        .stat-item, .legend-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin: 12px 0;
+            font-size: 14px;
+            padding: 12px;
+            background: rgba(0, 0, 0, 0.05);
+            border-radius: 8px;
+            transition: all 0.2s ease;
+            color: #1e293b;
+        }
+
+        .stat-item:hover, .legend-item:hover {
+            background: rgba(0, 0, 0, 0.1);
+            transform: translateX(5px);
+        }
+
+        .stat-value {
+            font-weight: 700;
+            color: var(--accent-color);
+            background: rgba(245, 158, 11, 0.2);
+            padding: 4px 8px;
+            border-radius: 6px;
+        }
+
+        .legend-color {
+            width: 30px;
+            height: 20px;
+            border-radius: 6px;
+            margin-right: 12px;
+            border: 2px solid rgba(0, 0, 0, 0.2);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+        }
+
+        /* Filter Tag Styles */
+        .filter-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 15px;
+        }
+
+        .filter-tag {
+            display: inline-block;
+            background: rgba(37, 99, 235, 0.1);
+            color: #1e293b;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            border: 1px solid rgba(37, 99, 235, 0.3);
+            font-weight: 600;
+        }
+
+        .filter-tag.active {
+            background: var(--accent-color);
+            color: white;
+            border-color: var(--accent-color);
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            :root {
+                --sidebar-width: 280px;
+            }
+            
+            .control-panel {
+                width: 100%;
+                position: absolute;
+                transform: translateX(-100%);
+            }
+            
+            .control-panel.active {
+                transform: translateX(0);
+            }
+            
+            .panel-toggle {
+                left: 20px;
+            }
+            
+            .floating-buttons {
+                right: 10px;
+                top: calc(var(--header-height) + 10px);
+            }
+            
+            .floating-btn {
+                width: 50px;
+                height: 50px;
+                font-size: 18px;
+            }
+            
+            .sidebar-panel {
+                width: 100%;
+                max-width: 320px;
+            }
+        }
+
+        /* Dark Mode Styles */
+        body.dark-mode {
+            --background-gradient: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            --text-light: #ffffff;
+            --glass-bg: rgba(0, 0, 0, 0.3);
+            --glass-border: rgba(255, 255, 255, 0.1);
+        }
+
+        body.dark-mode .header {
+            background: rgba(0, 0, 0, 0.95);
+            color: #ffffff;
+            border-bottom-color: rgba(255, 255, 255, 0.1);
+        }
+
+        body.dark-mode .logo,
+        body.dark-mode .header-info {
+            color: #ffffff;
+        }
+
+        body.dark-mode .control-panel,
+        body.dark-mode .sidebar-panel {
+            background: rgba(0, 0, 0, 0.9);
+            border-color: rgba(255, 255, 255, 0.1);
+            color: #ffffff;
+        }
+
+        body.dark-mode .panel-section {
+            background: rgba(255, 255, 255, 0.05);
+            border-color: rgba(255, 255, 255, 0.1);
+            color: #ffffff;
+        }
+
+        body.dark-mode .panel-title,
+        body.dark-mode .sidebar-title {
+            color: #ffffff;
+            border-bottom-color: rgba(255, 255, 255, 0.2);
+        }
+
+        body.dark-mode .form-label {
+            color: #ffffff;
+        }
+
+        body.dark-mode .form-input,
+        body.dark-mode .form-select {
+            background: rgba(255, 255, 255, 0.1);
+            color: #ffffff;
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        body.dark-mode .sidebar-header {
+            background: rgba(0, 0, 0, 0.5);
+            border-bottom-color: rgba(255, 255, 255, 0.1);
+        }
+
+        body.dark-mode .sidebar-close {
+            background: rgba(255, 255, 255, 0.1);
+            color: #ffffff;
+        }
+
+        body.dark-mode .sidebar-close:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        body.dark-mode .stat-item,
+        body.dark-mode .legend-item {
+            background: rgba(255, 255, 255, 0.1);
+            color: #ffffff;
+        }
+
+        body.dark-mode .filter-tag {
+            background: rgba(255, 255, 255, 0.1);
+            color: #ffffff;
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        /* Loading and Notification Styles */
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 3000;
+            backdrop-filter: blur(5px);
+        }
+
+        .loading-content {
+            background: linear-gradient(135deg, white, #f8fafc);
+            padding: 50px;
+            border-radius: 20px;
+            text-align: center;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .spinner {
+            width: 60px;
+            height: 60px;
+            border: 6px solid #e2e8f0;
+            border-top: 6px solid var(--primary-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 25px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .notification {
+            position: fixed;
+            top: calc(var(--header-height) + 10px);
+            right: 30px;
+            padding: 18px 25px;
+            border-radius: 12px;
+            color: white;
+            font-weight: 600;
+            z-index: 2001;
+            transform: translateX(100%);
+            transition: transform 0.4s ease;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(10px);
+        }
+
+        .notification.show {
+            transform: translateX(0);
+        }
+
+        .notification.success {
+            background: linear-gradient(135deg, var(--success-color), #059669);
+        }
+
+        .notification.error {
+            background: linear-gradient(135deg, var(--error-color), #dc2626);
+        }
+
+        .notification.info {
+            background: linear-gradient(135deg, var(--primary-color), #1d4ed8);
+        }
+
+        .notification.warning {
+            background: linear-gradient(135deg, var(--warning-color), #ea580c);
+        }
+
+        /* Custom Popup */
+        .custom-popup {
+            font-family: inherit;
+            line-height: 1.6;
+            max-width: 300px;
+        }
+
+        .popup-header {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--primary-color);
+            margin-bottom: 12px;
+            border-bottom: 2px solid #e5e7eb;
+            padding-bottom: 8px;
+        }
+
+        .popup-content p {
+            margin: 8px 0;
+            font-size: 14px;
+        }
+
+        /* Slider Styles */
+        .slider-container {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .slider-row {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .slider {
+            flex: 1;
+            height: 8px;
+            border-radius: 4px;
+            background: linear-gradient(to right, #e2e8f0 0%, #e2e8f0 100%);
+            outline: none;
+            -webkit-appearance: none;
+            cursor: pointer;
+        }
+
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--primary-color), #1d4ed8);
+            cursor: pointer;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+            transition: all 0.2s ease;
+        }
+
+        .slider::-webkit-slider-thumb:hover {
+            transform: scale(1.1);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.4);
+        }
+
+        .slider-value {
+            background: linear-gradient(135deg, var(--primary-color), #1d4ed8);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 700;
+            min-width: 70px;
+            text-align: center;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+        }
+
+        /* Additional Enhancements */
+        .continent-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .continent-btn {
+            background: #f8fafc;
+            border: 2px solid #e2e8f0;
+            color: var(--text-primary);
+            padding: 10px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            text-align: center;
+        }
+
+        .continent-btn:hover {
+            border-color: var(--primary-color);
+            background: #eff6ff;
+        }
+
+        .continent-btn.active {
+            background: var(--primary-color);
+            color: white;
+            border-color: var(--primary-color);
+        }
+
+        .threshold-display {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #f1f5f9;
+            padding: 10px;
+            border-radius: 8px;
+            margin-top: 10px;
+            font-size: 13px;
+        }
+
+        .threshold-label {
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        .threshold-value {
+            background: var(--primary-color);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-weight: 700;
+        }
+
+        .slider-info {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            color: var(--text-secondary);
+            margin-top: 5px;
+        }
+
+        /* Dark Mode Styles for new elements */
+        body.dark-mode .continent-btn {
+            background: rgba(255, 255, 255, 0.1);
+            color: #ffffff;
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        body.dark-mode .continent-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        body.dark-mode .continent-btn.active {
+            background: var(--primary-color);
+            color: #ffffff;
+        }
+
+        body.dark-mode .threshold-display {
+            background: rgba(255, 255, 255, 0.05);
+            color: #ffffff;
+        }
+
+        body.dark-mode .threshold-label {
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .switch-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 30px;
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .switch-slider:before {
+            position: absolute;
+            content: "";
+            height: 22px;
+            width: 22px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        input:checked + .switch-slider {
+            background-color: var(--primary-color);
+        }
+
+        input:checked + .switch-slider:before {
+            transform: translateX(30px);
+        }
+
+        input:focus + .switch-slider {
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1), 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+
+        /* Theme toggle container styling */
+        .theme-toggle-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+            margin-top: 15px;
+            padding: 20px;
+            background: linear-gradient(135deg, #f8fafc, #e2e8f0);
+            border-radius: 12px;
+            border: 2px solid rgba(37, 99, 235, 0.1);
+            transition: all 0.3s ease;
+        }
+
+        .theme-toggle-container:hover {
+            border-color: rgba(37, 99, 235, 0.3);
+            transform: translateY(-1px);
+        }
+
+        .theme-label {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+            transition: color 0.3s ease;
+        }
+
+        .theme-description {
+            text-align: center;
+            margin-top: 12px;
+            font-size: 12px;
+            color: var(--text-secondary);
+            font-style: italic;
+        }
+
+        /* Dark mode theme toggle */
+        body.dark-mode .theme-toggle-container {
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        body.dark-mode .theme-toggle-container:hover {
+            border-color: rgba(255, 255, 255, 0.4);
+        }
+
+        body.dark-mode .theme-label {
+            color: #ffffff;
+        }
+
+        body.dark-mode .theme-description {
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        /* Switch styling */
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 60px;
+            height: 30px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="logo">
+            <i class="fas fa-globe-americas"></i>
+            Enhanced Population Density Map
+        </div>
+        <div class="header-info">
+            <div class="status-indicator">
+                <div class="status-dot"></div>
+                <span id="connectionStatus">Live Data</span>
+            </div>
+            <div>
+                <i class="fas fa-users"></i>
+                <span id="totalCountriesHeader">0 Countries</span>
+            </div>
+        </div>
+    </header>
+
+    <div class="app-container">
+        <!-- Main Control Panel (Left Sidebar) -->
+        <div class="control-panel" id="controlPanel">
+            <!-- CSV Data Import Section -->
+            <div class="panel-section">
+                <h3 class="panel-title">
+                    <i class="fas fa-file-csv"></i>
+                    Data Import & Status
+                </h3>
+                
+                <div class="upload-area" id="uploadArea" onclick="document.getElementById('csvFile').click()" style="border: 3px dashed #d1d5db; border-radius: 15px; padding: 30px; text-align: center; background: linear-gradient(135deg, #f8fafc, #f1f5f9); transition: all 0.3s ease; cursor: pointer;">
+                    <i class="fas fa-cloud-upload-alt" style="font-size: 40px; color: var(--primary-color); margin-bottom: 15px; display: block;"></i>
+                    <p><strong>Upload World Population CSV</strong></p>
+                    <p style="font-size: 12px; color: var(--text-secondary); margin-top: 8px;">
+                        Drag & drop or click to select world_population.csv
+                    </p>
+                </div>
+                
+                <input type="file" id="csvFile" style="display: none;" accept=".csv" onchange="handleFileUpload(event)">
+                
+                <button class="btn" onclick="loadSampleData()">
+                    <i class="fas fa-database"></i>
+                    Load Sample Data
+                </button>
+                
+                <div class="form-group">
+                    <label class="form-label">
+                        <i class="fas fa-info-circle"></i>
+                        Data Status
+                    </label>
+                    <div id="dataStatus" style="padding: 12px; background: #f1f5f9; border-radius: 8px; font-size: 14px; border-left: 4px solid var(--warning-color);">
+                        No data loaded. Please upload CSV or load sample data.
+                    </div>
+                </div>
+            </div>
+
+            <!-- Search Section -->
+            <div class="panel-section">
+                <h3 class="panel-title">
+                    <i class="fas fa-search"></i>
+                    Search Countries
+                </h3>
+                
+                <div class="form-group">
+                    <label class="form-label">
+                        <i class="fas fa-globe"></i>
+                        Find Country
+                    </label>
+                    <div class="search-wrapper" style="position: relative;">
+                        <input type="text" class="form-input" id="countrySearch" 
+                               placeholder="Type country name..." autocomplete="off">
+                        <div id="searchSuggestions" class="search-suggestions" style="
+                            position: absolute;
+                            top: 100%;
+                            left: 0;
+                            right: 0;
+                            background: white;
+                            border: 2px solid #e2e8f0;
+                            border-top: none;
+                            border-radius: 0 0 10px 10px;
+                            max-height: 200px;
+                            overflow-y: auto;
+                            z-index: 1000;
+                            display: none;
+                        "></div>
+                    </div>
+                    <button class="btn secondary" onclick="clearSearch()" style="margin-top: 10px;">
+                        <i class="fas fa-times"></i>
+                        Clear Search
+                    </button>
+                </div>
+            </div>
+
+            <!-- Quick Update Button -->
+            <div class="panel-section">
+                <h3 class="panel-title">
+                    <i class="fas fa-sync-alt"></i>
+                    Quick Actions
+                </h3>
+                
+                <button class="btn success" onclick="updateMapVisualization()" style="font-size: 16px; padding: 16px 24px;">
+                    <i class="fas fa-refresh"></i>
+                    Update Map
+                </button>
+                
+                <button class="btn secondary" onclick="resetAllFilters()">
+                    <i class="fas fa-undo"></i>
+                    Reset All
+                </button>
+            </div>
+        </div>
+
+        <!-- Panel Toggle -->
+        <button class="panel-toggle" id="panelToggle" onclick="togglePanel()">
+            <i class="fas fa-chevron-left"></i>
+        </button>
+
+        <!-- Map Container -->
+        <div class="map-container">
+            <div id="map"></div>
+            
+            <!-- Floating Action Buttons -->
+            <div class="floating-buttons">
+                <button class="floating-btn" onclick="toggleSidebar('stats')" data-tooltip="Statistics Panel">
+                    <i class="fas fa-chart-bar"></i>
+                </button>
+                <button class="floating-btn secondary" onclick="toggleSidebar('legend')" data-tooltip="Legend Panel">
+                    <i class="fas fa-list"></i>
+                </button>
+                <button class="floating-btn success" onclick="toggleSidebar('filters')" data-tooltip="Filters Panel">
+                    <i class="fas fa-filter"></i>
+                </button>
+                <button class="floating-btn warning" onclick="toggleSidebar('controls')" data-tooltip="Settings Panel">
+                    <i class="fas fa-cog"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Statistics Sidebar -->
+    <div class="sidebar-panel right" id="statsSidebar">
+        <div class="sidebar-header">
+            <div class="sidebar-title">
+                <i class="fas fa-chart-bar"></i>
+                Live Statistics
+            </div>
+            <button class="sidebar-close" onclick="closeSidebar('stats')">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="sidebar-content">
+            <div class="stat-item">
+                <span><i class="fas fa-globe"></i> Total Countries:</span>
+                <span class="stat-value" id="totalCountries">0</span>
+            </div>
+            <div class="stat-item">
+                <span><i class="fas fa-eye"></i> Displayed:</span>
+                <span class="stat-value" id="displayedCountries">0</span>
+            </div>
+            <div class="stat-item">
+                <span><i class="fas fa-users"></i> Total Population:</span>
+                <span class="stat-value" id="totalPopulation">0</span>
+            </div>
+            <div class="stat-item">
+                <span><i class="fas fa-chart-line"></i> Avg Density:</span>
+                <span class="stat-value" id="avgDensity">0 /km²</span>
+            </div>
+            <div class="stat-item">
+                <span><i class="fas fa-fire"></i> Max Density:</span>
+                <span class="stat-value" id="maxDensity">0 /km²</span>
+            </div>
+            <div class="stat-item">
+                <span><i class="fas fa-map-marker-alt"></i> Selected:</span>
+                <span class="stat-value" id="selectedCountry">None</span>
+            </div>
+            
+            <div class="panel-section">
+                <h3 class="panel-title">
+                    <i class="fas fa-crown"></i>
+                    Quick Insights
+                </h3>
+                <button class="btn" onclick="showMostPopulous()">
+                    <i class="fas fa-users"></i>
+                    Top 10 Most Populous
+                </button>
+                <button class="btn secondary" onclick="showHighestDensity()">
+                    <i class="fas fa-compress"></i>
+                    Highest Density
+                </button>
+                <button class="btn warning" onclick="exportFilteredData()">
+                    <i class="fas fa-download"></i>
+                    Export Data
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Legend Sidebar -->
+    <div class="sidebar-panel right" id="legendSidebar">
+        <div class="sidebar-header">
+            <div class="sidebar-title">
+                <i class="fas fa-list"></i>
+                <span id="legendTitle">Population Density Legend</span>
+            </div>
+            <button class="sidebar-close" onclick="closeSidebar('legend')">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="sidebar-content">
+            <div id="legendContent">
+                <!-- Legend items will be populated by JavaScript -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters Sidebar -->
+    <div class="sidebar-panel right" id="filtersSidebar">
+        <div class="sidebar-header">
+            <div class="sidebar-title">
+                <i class="fas fa-filter"></i>
+                Advanced Filters
+            </div>
+            <button class="sidebar-close" onclick="closeSidebar('filters')">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="sidebar-content">
+            <!-- Continent Selection -->
+            <div class="panel-section">
+                <h3 class="panel-title">
+                    <i class="fas fa-map"></i>
+                    Continent Selection
+                </h3>
+                
+                <div class="form-group">
+                    <label class="form-label">
+                        <i class="fas fa-filter"></i>
+                        Select Continent
+                    </label>
+                    <select class="form-select" id="continentFilter">
+                        <option value="all">🌍 All Continents</option>
+                        <option value="Asia">🏯 Asia</option>
+                        <option value="Europe">🏰 Europe</option>
+                        <option value="Africa">🦁 Africa</option>
+                        <option value="North America">🗽 North America</option>
+                        <option value="South America">🌴 South America</option>
+                        <option value="Oceania">🏝️ Oceania</option>
+                    </select>
+                </div>
+
+                <div class="continent-grid" id="continentGrid">
+                    <button class="continent-btn active" data-continent="all">All</button>
+                    <button class="continent-btn" data-continent="Asia">Asia</button>
+                    <button class="continent-btn" data-continent="Europe">Europe</button>
+                    <button class="continent-btn" data-continent="Africa">Africa</button>
+                    <button class="continent-btn" data-continent="North America">N. America</button>
+                    <button class="continent-btn" data-continent="South America">S. America</button>
+                    <button class="continent-btn" data-continent="Oceania">Oceania</button>
+                </div>
+            </div>
+
+            <!-- Year Selection -->
+            <div class="panel-section">
+                <h3 class="panel-title">
+                    <i class="fas fa-calendar-alt"></i>
+                    Time Period Selection
+                </h3>
+                
+                <div class="form-group">
+                    <label class="form-label">
+                        <i class="fas fa-clock"></i>
+                        Population Year
+                    </label>
+                    <select class="form-select" id="populationYear">
+                        <option value="2022">📊 2022 (Latest)</option>
+                        <option value="2020">📊 2020</option>
+                        <option value="2015">📊 2015</option>
+                        <option value="2010">📊 2010</option>
+                        <option value="2000">📊 2000</option>
+                        <option value="1990">📊 1990</option>
+                        <option value="1980">📊 1980</option>
+                        <option value="1970">📊 1970</option>
+                    </select>
+                </div>
+
+                <div class="threshold-display">
+                    <span class="threshold-label">Selected Year:</span>
+                    <span class="threshold-value" id="selectedYearDisplay">2022</span>
+                </div>
+            </div>
+
+            <!-- Enhanced Threshold Controls -->
+            <div class="panel-section">
+                <h3 class="panel-title">
+                    <i class="fas fa-sliders-h"></i>
+                    Population & Density Thresholds
+                </h3>
+                
+                <div class="form-group">
+                    <label class="form-label">
+                        <i class="fas fa-users"></i>
+                        Minimum Population Threshold
+                    </label>
+                    <div class="slider-container">
+                        <div class="slider-row">
+                            <input type="range" class="slider" id="populationThreshold" 
+                                   min="0" max="500000000" step="5000000" value="0">
+                            <span class="slider-value" id="populationThresholdValue">0M</span>
+                        </div>
+                        <div class="slider-info">
+                            <span>0</span>
+                            <span>500M</span>
+                        </div>
+                    </div>
+                    <div class="threshold-display">
+                        <span class="threshold-label">Countries Above Threshold:</span>
+                        <span class="threshold-value" id="populationCountDisplay">0</span>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">
+                        <i class="fas fa-compress-arrows-alt"></i>
+                        Minimum Density Threshold (per km²)
+                    </label>
+                    <div class="slider-container">
+                        <div class="slider-row">
+                            <input type="range" class="slider" id="densityThreshold" 
+                                   min="0" max="1000" step="10" value="0">
+                            <span class="slider-value" id="densityThresholdValue">0</span>
+                        </div>
+                        <div class="slider-info">
+                            <span>0</span>
+                            <span>1000/km²</span>
+                        </div>
+                    </div>
+                    <div class="threshold-display">
+                        <span class="threshold-label">Countries Above Threshold:</span>
+                        <span class="threshold-value" id="densityCountDisplay">0</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Active Filters Display -->
+            <div class="panel-section">
+                <h3 class="panel-title">
+                    <i class="fas fa-tags"></i>
+                    Active Filters Summary
+                </h3>
+                <div class="filter-tags" id="filterTags">
+                    <span class="filter-tag active">All Continents</span>
+                    <span class="filter-tag active">Year: 2022</span>
+                    <span class="filter-tag">Population: All</span>
+                    <span class="filter-tag">Density: All</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Controls Sidebar -->
+    <div class="sidebar-panel right" id="controlsSidebar">
+        <div class="sidebar-header">
+            <div class="sidebar-title">
+                <i class="fas fa-cog"></i>
+                Visualization Settings
+            </div>
+            <button class="sidebar-close" onclick="closeSidebar('controls')">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="sidebar-content">
+            <!-- Color Scheme -->
+            <div class="panel-section">
+                <h3 class="panel-title">
+                    <i class="fas fa-palette"></i>
+                    Color Scheme
+                </h3>
+                
+                <div class="form-group">
+                    <label class="form-label">
+                        <i class="fas fa-paint-brush"></i>
+                        Visualization Mode
+                    </label>
+                    <select class="form-select" id="colorScheme">
+                        <option value="density">🎯 Population Density</option>
+                        <option value="population">👥 Total Population</option>
+                        <option value="growth">📈 Growth Rate</option>
+                        <option value="area">🗺️ Country Area</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Visual Settings -->
+            <div class="panel-section">
+                <h3 class="panel-title">
+                    <i class="fas fa-eye"></i>
+                    Visual Settings
+                </h3>
+                
+                <div class="form-group">
+                    <label class="form-label">
+                        <i class="fas fa-circle"></i>
+                        Circle Opacity
+                    </label>
+                    <div class="slider-container">
+                        <div class="slider-row">
+                            <input type="range" class="slider" id="opacitySlider" 
+                                   min="0.2" max="1" step="0.1" value="0.7">
+                            <span class="slider-value" id="opacityValue">0.7</span>
+                        </div>
+                        <div class="slider-info">
+                            <span>20%</span>
+                            <span>100%</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">
+                        <i class="fas fa-expand-arrows-alt"></i>
+                        Size Multiplier
+                    </label>
+                    <div class="slider-container">
+                        <div class="slider-row">
+                            <input type="range" class="slider" id="sizeMultiplier" 
+                                   min="0.5" max="3" step="0.1" value="1">
+                            <span class="slider-value" id="sizeValue">1.0x</span>
+                        </div>
+                        <div class="slider-info">
+                            <span>0.5x</span>
+                            <span>3.0x</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Map Style -->
+            <div class="panel-section">
+                <h3 class="panel-title">
+                    <i class="fas fa-map"></i>
+                    Map Style
+                </h3>
+                
+                <div class="form-group">
+                    <label class="form-label">
+                        <i class="fas fa-layer-group"></i>
+                        Base Map
+                    </label>
+                    <select class="form-select" id="mapStyle">
+                        <option value="osm">🗺️ OpenStreetMap</option>
+                        <option value="satellite">🛰️ Satellite</option>
+                        <option value="terrain">🏔️ Terrain</option>
+                        <option value="dark">🌙 Dark</option>
+                        <option value="light">☀️ Light</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Theme Toggle -->
+            <div class="panel-section">
+                <h3 class="panel-title">
+                    <i class="fas fa-moon"></i>
+                    Theme Settings
+                </h3>
+                
+                <div class="form-group">
+                    <label class="form-label">
+                        <i class="fas fa-palette"></i>
+                        Interface Theme
+                    </label>
+                    <div class="theme-toggle-container">
+                        <span class="theme-label">☀️ Light</span>
+                        <label class="switch">
+                            <input type="checkbox" id="darkModeToggle" onchange="toggleDarkMode()">
+                            <span class="switch-slider"></span>
+                        </label>
+                        <span class="theme-label">🌙 Dark</span>
+                    </div>
+                    <div class="theme-description">
+                        Toggle between light and dark interface themes for better viewing experience
+                    </div>
+                </div>
+            </div>
+
+            <!-- Apply Settings Button -->
+            <div class="panel-section">
+                <h3 class="panel-title">
+                    <i class="fas fa-check"></i>
+                    Apply Changes
+                </h3>
+                
+                <button class="btn success" onclick="updateMapVisualization()" style="margin-bottom: 10px;">
+                    <i class="fas fa-refresh"></i>
+                    Apply Settings
+                </button>
+                
+                <button class="btn secondary" onclick="resetVisualSettings()">
+                    <i class="fas fa-undo"></i>
+                    Reset to Defaults
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-content">
+            <div class="spinner"></div>
+            <h3 id="loadingTitle">Processing Data...</h3>
+            <p id="loadingMessage">Please wait while we load and process the population data</p>
+        </div>
+    </div>
+
+    <!-- Notification -->
+    <div class="notification" id="notification">
+        <span id="notificationText"></span>
+    </div>
+
+    <!-- External Scripts -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    
+    <script>
+        // Global Variables
+        let map;
+        let populationLayer;
+        let csvData = [];
+        let filteredData = [];
+        let markers = L.layerGroup();
+        let currentTileLayer;
+        // FIXED: Better sidebar state management
+        let activeSidebars = new Set();
+        let sidebarToggling = false; // Prevent rapid toggling
+
+        // Map Styles Configuration
+        const mapStyles = {
+            osm: {
+                name: "OpenStreetMap",
+                url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+                attribution: '&copy; OpenStreetMap contributors'
+            },
+            satellite: {
+                name: "Satellite",
+                url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+                attribution: '&copy; Esri, Maxar, GeoEye'
+            },
+            terrain: {
+                name: "Terrain",
+                url: "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",
+                attribution: '&copy; OpenTopoMap contributors'
+            },
+            dark: {
+                name: "Dark Theme",
+                url: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+                attribution: '&copy; OpenStreetMap contributors, &copy; CARTO'
+            },
+            light: {
+                name: "Light Minimal",
+                url: "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+                attribution: '&copy; OpenStreetMap contributors, &copy; CARTO'
+            }
+        };
+
+        // Color Palettes
+        const colorPalettes = {
+            density: ['#ffffcc', '#c7e9b4', '#7fcdbb', '#41b6c4', '#2c7fb8', '#253494'],
+            population: ['#fee5d9', '#fcbba1', '#fc9272', '#fb6a4a', '#de2d26', '#a50f15'],
+            growth: ['#d73027', '#f46d43', '#fdae61', '#fee08b', '#d9ef8b', '#a6d96a'],
+            area: ['#f7fcf0', '#e0f3db', '#ccebc5', '#a8ddb5', '#7bccc4', '#4eb3d3']
+        };
+
+        // Default coordinates for countries
+        const defaultCoordinates = {
+            'China': [35.8617, 104.1954],
+            'India': [20.5937, 78.9629],
+            'United States': [39.8283, -98.5795],
+            'Indonesia': [-0.7893, 113.9213],
+            'Pakistan': [30.3753, 69.3451],
+            'Brazil': [-14.2350, -51.9253],
+            'Nigeria': [9.0820, 8.6753],
+            'Bangladesh': [23.6850, 90.3563],
+            'Russia': [61.5240, 105.3188],
+            'Mexico': [23.6345, -102.5528],
+            'Japan': [36.2048, 138.2529],
+            'Ethiopia': [9.1450, 40.4897],
+            'Philippines': [12.8797, 121.7740],
+            'Egypt': [26.0975, 30.0444],
+            'Vietnam': [14.0583, 108.2772],
+            'Turkey': [38.9637, 35.2433],
+            'Iran': [32.4279, 53.6880],
+            'Germany': [51.1657, 10.4515],
+            'Thailand': [15.8700, 100.9925],
+            'United Kingdom': [55.3781, -3.4360],
+            'France': [46.6034, 1.8883],
+            'Italy': [41.8719, 12.5674],
+            'South Africa': [-30.5595, 22.9375],
+            'South Korea': [35.9078, 127.7669],
+            'Colombia': [4.5709, -74.2973],
+            'Spain': [40.4637, -3.7492],
+            'Argentina': [-38.4161, -63.6167],
+            'Canada': [56.1304, -106.3468],
+            'Australia': [-25.2744, 133.7751]
+        };
+
+        // Initialize Application
+        function initApp() {
+            try {
+                if (typeof L === 'undefined') {
+                    throw new Error('Leaflet library not available');
+                }
+                
+                initMap();
+                setupEventListeners();
+                initializeLegend();
+                loadDarkModePreference();
+                
+                // Initialize with default values
+                document.getElementById('populationThreshold').value = '0';
+                document.getElementById('densityThreshold').value = '0';
+                document.getElementById('populationThresholdValue').textContent = '0M';
+                document.getElementById('densityThresholdValue').textContent = '0';
+                document.getElementById('selectedYearDisplay').textContent = '2022';
+                document.getElementById('sizeValue').textContent = '1.0x';
+                document.getElementById('opacityValue').textContent = '0.7';
+                
+                updateFilterSummary();
+                updateGlobalStatistics();
+                showNotification('Population Density Map loaded successfully! 🎉', 'success');
+                
+                // Show welcome message about sidebars
+                setTimeout(() => {
+                    showNotification('Click the floating buttons on the right to open panels! 👉', 'info');
+                }, 2000);
+                
+            } catch (error) {
+                console.error('Error initializing app:', error);
+                showNotification('Error initializing map: ' + error.message, 'error');
+            }
+        }
+
+        // Initialize Map
+        function initMap() {
+            try {
+                map = L.map('map', {
+                    zoomControl: false,
+                    preferCanvas: true
+                }).setView([20, 0], 2);
+
+                L.control.zoom({ position: 'topleft' }).addTo(map);
+                changeMapStyle('osm');
+                markers.addTo(map);
+                
+                console.log('Map initialized successfully');
+            } catch (error) {
+                console.error('Error initializing map:', error);
+                throw error;
+            }
+        }
+
+        // Change Map Style
+        function changeMapStyle(styleKey) {
+            const style = mapStyles[styleKey];
+            if (!style) return;
+
+            if (currentTileLayer) {
+                map.removeLayer(currentTileLayer);
+            }
+
+            currentTileLayer = L.tileLayer(style.url, {
+                attribution: style.attribution,
+                maxZoom: 19
+            }).addTo(map);
+
+            console.log(`Map style changed to: ${style.name}`);
+        }
+
+        // FIXED: Better Sidebar Management - No More Flickering
+        function toggleSidebar(type) {
+            // Prevent rapid toggling that causes flickering
+            if (sidebarToggling) return;
+            sidebarToggling = true;
+            
+            console.log('Toggling sidebar:', type);
+            const sidebarId = type + 'Sidebar';
+            const sidebar = document.getElementById(sidebarId);
+            
+            if (!sidebar) {
+                console.error('Sidebar not found:', sidebarId);
+                showNotification(`Error: ${type} panel not found!`, 'error');
+                sidebarToggling = false;
+                return;
+            }
+
+            // Close other sidebars first - FIXED: Wait for other sidebars to close
+            const otherSidebarsOpen = Array.from(activeSidebars).filter(activeType => activeType !== type);
+            
+            if (otherSidebarsOpen.length > 0) {
+                // Close other sidebars and wait
+                otherSidebarsOpen.forEach(activeType => {
+                    const otherSidebar = document.getElementById(activeType + 'Sidebar');
+                    if (otherSidebar && otherSidebar.classList.contains('open')) {
+                        otherSidebar.classList.remove('open');
+                        activeSidebars.delete(activeType);
+                    }
+                });
+                
+                // Wait for transition to complete before opening new sidebar
+                setTimeout(() => {
+                    if (sidebar.classList.contains('open')) {
+                        closeSidebar(type);
+                    } else {
+                        openSidebar(type);
+                    }
+                    sidebarToggling = false;
+                }, 100); // Small delay to prevent flickering
+            } else {
+                // No other sidebars open, toggle immediately
+                if (sidebar.classList.contains('open')) {
+                    closeSidebar(type);
+                } else {
+                    openSidebar(type);
+                }
+                sidebarToggling = false;
+            }
+        }
+
+        function openSidebar(type) {
+            console.log('Opening sidebar:', type);
+            const sidebarId = type + 'Sidebar';
+            const sidebar = document.getElementById(sidebarId);
+            
+            if (!sidebar) {
+                console.error('Cannot open sidebar - not found:', sidebarId);
+                return;
+            }
+
+            // FIXED: Set visibility first, then add open class
+            sidebar.style.visibility = 'visible';
+            
+            // Use requestAnimationFrame to ensure the visibility change is applied
+            requestAnimationFrame(() => {
+                sidebar.classList.add('open');
+                activeSidebars.add(type);
+                document.body.classList.add('sidebar-open');
+                
+                // Update floating button position
+                updateFloatingButtonsPosition();
+                
+                showNotification(`${type.charAt(0).toUpperCase() + type.slice(1)} panel opened`, 'info');
+            });
+        }
+
+        function closeSidebar(type) {
+            console.log('Closing sidebar:', type);
+            const sidebarId = type + 'Sidebar';
+            const sidebar = document.getElementById(sidebarId);
+            
+            if (!sidebar) {
+                console.error('Cannot close sidebar - not found:', sidebarId);
+                return;
+            }
+
+            sidebar.classList.remove('open');
+            activeSidebars.delete(type);
+            
+            // Wait for transition to complete before hiding
+            setTimeout(() => {
+                if (!sidebar.classList.contains('open')) {
+                    sidebar.style.visibility = 'hidden';
+                }
+            }, 300); // Match transition duration
+            
+            // If no sidebars are open, remove the body class
+            if (activeSidebars.size === 0) {
+                document.body.classList.remove('sidebar-open');
+            }
+
+            updateFloatingButtonsPosition();
+            showNotification(`${type.charAt(0).toUpperCase() + type.slice(1)} panel closed`, 'info');
+        }
+
+        function updateFloatingButtonsPosition() {
+            const buttons = document.querySelector('.floating-buttons');
+            // The CSS will handle the transition smoothly
+        }
+
+        // Setup Event Listeners
+        function setupEventListeners() {
+            // File upload drag and drop
+            const uploadArea = document.getElementById('uploadArea');
+            
+            uploadArea.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                uploadArea.style.borderColor = 'var(--primary-color)';
+                uploadArea.style.background = 'linear-gradient(135deg, #eff6ff, #dbeafe)';
+            });
+            
+            uploadArea.addEventListener('dragleave', () => {
+                uploadArea.style.borderColor = '#d1d5db';
+                uploadArea.style.background = 'linear-gradient(135deg, #f8fafc, #f1f5f9)';
+            });
+            
+            uploadArea.addEventListener('drop', (e) => {
+                e.preventDefault();
+                uploadArea.style.borderColor = '#d1d5db';
+                uploadArea.style.background = 'linear-gradient(135deg, #f8fafc, #f1f5f9)';
+                
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    handleFile(files[0]);
+                }
+            });
+
+            // Real-time updates for sliders
+            document.getElementById('populationThreshold').addEventListener('input', (e) => {
+                updateThresholdDisplay('population', e.target.value);
+                updateFilterSummary();
+            });
+            
+            document.getElementById('densityThreshold').addEventListener('input', (e) => {
+                updateThresholdDisplay('density', e.target.value);
+                updateFilterSummary();
+            });
+            
+            document.getElementById('sizeMultiplier').addEventListener('input', (e) => {
+                document.getElementById('sizeValue').textContent = e.target.value + 'x';
+            });
+            
+            document.getElementById('opacitySlider').addEventListener('input', (e) => {
+                document.getElementById('opacityValue').textContent = e.target.value;
+            });
+
+            // Year selection update
+            document.getElementById('populationYear').addEventListener('change', (e) => {
+                document.getElementById('selectedYearDisplay').textContent = e.target.value;
+                updateFilterSummary();
+                if (csvData.length > 0) {
+                    updateThresholdDisplay('population', document.getElementById('populationThreshold').value);
+                }
+            });
+
+            // Continent selection update
+            document.getElementById('continentFilter').addEventListener('change', (e) => {
+                updateFilterSummary();
+                // Update continent buttons to match
+                document.querySelectorAll('.continent-btn').forEach(btn => btn.classList.remove('active'));
+                const matchingBtn = document.querySelector(`.continent-btn[data-continent="${e.target.value}"]`);
+                if (matchingBtn) {
+                    matchingBtn.classList.add('active');
+                }
+                // Snap to selected continent
+                snapToContinent(e.target.value);
+            });
+
+            // Setup continent buttons
+            setupContinentButtons();
+
+            // Other event listeners
+            document.getElementById('colorScheme').addEventListener('change', () => {
+                updateFilterSummary();
+            });
+
+            document.getElementById('mapStyle').addEventListener('change', (e) => {
+                changeMapStyle(e.target.value);
+                showNotification(`Map style changed to ${mapStyles[e.target.value].name}`, 'info');
+            });
+
+            document.getElementById('countrySearch').addEventListener('input', (e) => {
+                handleCountrySearch(e.target.value);
+            });
+
+            // Click outside to close search suggestions
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('.search-wrapper')) {
+                    document.getElementById('searchSuggestions').style.display = 'none';
+                }
+            });
+
+            // Keyboard shortcuts
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    // Close all sidebars on Escape
+                    activeSidebars.forEach(type => closeSidebar(type));
+                }
+            });
+        }
+
+        // Setup Continent Buttons
+        function setupContinentButtons() {
+            const buttons = document.querySelectorAll('.continent-btn');
+            const select = document.getElementById('continentFilter');
+            
+            buttons.forEach(button => {
+                button.addEventListener('click', () => {
+                    // Update button states
+                    buttons.forEach(btn => btn.classList.remove('active'));
+                    button.classList.add('active');
+                    
+                    // Update select value
+                    const continent = button.dataset.continent;
+                    select.value = continent;
+                    
+                    // Snap to continent
+                    snapToContinent(continent);
+                    
+                    // Update filter summary
+                    updateFilterSummary();
+                });
+            });
+        }
+
+        // Snap Map to Continent
+        function snapToContinent(continent) {
+            const continentBounds = {
+                'Asia': [[7, 26], [81, 180]],
+                'Europe': [[34, -25], [71, 60]],
+                'Africa': [[-35, -25], [37, 63]],
+                'North America': [[7, -180], [84, -52]],
+                'South America': [[-56, -93], [13, -32]],
+                'Oceania': [[-55, 113], [-8, 180]],
+                'all': [[-85, -180], [85, 180]]
+            };
+
+            const bounds = continentBounds[continent];
+            if (bounds) {
+                const leafletBounds = L.latLngBounds(bounds[0], bounds[1]);
+                
+                map.fitBounds(leafletBounds, {
+                    padding: [20, 20],
+                    animate: true,
+                    duration: 1.0
+                });
+                
+                const continentNames = {
+                    'Asia': '🏯 Asia',
+                    'Europe': '🏰 Europe', 
+                    'Africa': '🦁 Africa',
+                    'North America': '🗽 North America',
+                    'South America': '🌴 South America',
+                    'Oceania': '🏝️ Oceania',
+                    'all': '🌍 World View'
+                };
+                
+                showNotification(`Zoomed to ${continentNames[continent] || continent}`, 'info');
+            }
+        }
+
+        // Initialize Legend
+        function initializeLegend() {
+            const scheme = 'density';
+            const colors = colorPalettes[scheme];
+            const ranges = ['0-25', '25-50', '50-100', '100-250', '250-500', '500+'];
+            const title = 'Population Density (per km²)';
+            
+            document.getElementById('legendTitle').textContent = title;
+            const legendContent = document.getElementById('legendContent');
+            legendContent.innerHTML = '';
+            
+            colors.forEach((color, index) => {
+                if (index < ranges.length) {
+                    const item = document.createElement('div');
+                    item.className = 'legend-item';
+                    item.innerHTML = `
+                        <div class="legend-color" style="background-color: ${color}"></div>
+                        <span>${ranges[index]}</span>
+                    `;
+                    legendContent.appendChild(item);
+                }
+            });
+        }
+
+        // Load Sample Data
+        function loadSampleData() {
+            showLoading(true, 'Loading Sample Data...', 'Generating comprehensive world population data');
+            
+            // Enhanced sample data
+            csvData = [
+                {name: 'China', cca3: 'CHN', capital: 'Beijing', continent: 'Asia', population2022: 1439323776, population2020: 1439323776, population2015: 1393715448, population2010: 1348191368, population2000: 1264099069, population1990: 1155305000, population1980: 987305000, population1970: 827601000, area: 9596960, density: 150, growthRate: 0.39, worldPercentage: 18.47, coordinates: [35.8617, 104.1954]},
+                {name: 'India', cca3: 'IND', capital: 'New Delhi', continent: 'Asia', population2022: 1380004385, population2020: 1380004385, population2015: 1310152403, population2010: 1230984504, population2000: 1056575549, population1990: 873785000, population1980: 696784000, population1970: 557501000, area: 3287263, density: 420, growthRate: 0.68, worldPercentage: 17.70, coordinates: [20.5937, 78.9629]},
+                {name: 'United States', cca3: 'USA', capital: 'Washington, D.C.', continent: 'North America', population2022: 331002651, population2020: 331002651, population2015: 320738994, population2010: 309011475, population2000: 282398554, population1990: 250132000, population1980: 227225000, population1970: 205052000, area: 9833517, density: 34, growthRate: 0.59, worldPercentage: 4.25, coordinates: [39.8283, -98.5795]},
+                {name: 'Indonesia', cca3: 'IDN', capital: 'Jakarta', continent: 'Asia', population2022: 273523615, population2020: 273523615, population2015: 258383256, population2010: 242016173, population2000: 214072421, population1990: 184346000, population1980: 148177000, population1970: 115124000, area: 1904569, density: 144, growthRate: 1.07, worldPercentage: 3.51, coordinates: [-0.7893, 113.9213]},
+                {name: 'Pakistan', cca3: 'PAK', capital: 'Islamabad', continent: 'Asia', population2022: 220892340, population2020: 220892340, population2015: 199085847, population2010: 179160111, population2000: 154369924, population1990: 111845000, population1980: 84486000, population1970: 65706000, area: 881912, density: 251, growthRate: 2.00, worldPercentage: 2.83, coordinates: [30.3753, 69.3451]},
+                {name: 'Brazil', cca3: 'BRA', capital: 'Brasília', continent: 'South America', population2022: 212559417, population2020: 212559417, population2015: 206077898, population2010: 196353492, population2000: 176319906, population1990: 149650000, population1980: 121286000, population1970: 96369000, area: 8514877, density: 25, growthRate: 0.72, worldPercentage: 2.73, coordinates: [-14.2350, -51.9253]},
+                {name: 'Nigeria', cca3: 'NGA', capital: 'Abuja', continent: 'Africa', population2022: 206139589, population2020: 206139589, population2015: 183523432, population2010: 159424742, population2000: 122851984, population1990: 97552000, population1980: 73698000, population1970: 55653000, area: 923768, density: 223, growthRate: 2.58, worldPercentage: 2.64, coordinates: [9.0820, 8.6753]},
+                {name: 'Bangladesh', cca3: 'BGD', capital: 'Dhaka', continent: 'Asia', population2022: 164689383, population2020: 164689383, population2015: 159405545, population2010: 147575434, population2000: 129193327, population1990: 105256000, population1980: 83929000, population1970: 67401000, area: 147570, density: 1116, growthRate: 1.01, worldPercentage: 2.11, coordinates: [23.6850, 90.3563]},
+                {name: 'Russia', cca3: 'RUS', capital: 'Moscow', continent: 'Europe', population2022: 145934462, population2020: 145934462, population2015: 144668389, population2010: 142849468, population2000: 146844839, population1990: 148244000, population1980: 139010000, population1970: 130079000, area: 17098242, density: 9, growthRate: 0.04, worldPercentage: 1.87, coordinates: [61.5240, 105.3188]},
+                {name: 'Mexico', cca3: 'MEX', capital: 'Mexico City', continent: 'North America', population2022: 128932753, population2020: 128932753, population2015: 121736809, population2010: 114255555, population2000: 103874405, population1990: 86154000, population1980: 70394000, population1970: 52775000, area: 1964375, density: 66, growthRate: 1.06, worldPercentage: 1.65, coordinates: [23.6345, -102.5528]},
+                {name: 'Japan', cca3: 'JPN', capital: 'Tokyo', continent: 'Asia', population2022: 125836021, population2020: 125836021, population2015: 126785797, population2010: 127043410, population2000: 126771662, population1990: 122249000, population1980: 116807000, population1970: 104345000, area: 377930, density: 333, growthRate: -0.30, worldPercentage: 1.62, coordinates: [36.2048, 138.2529]},
+                {name: 'Ethiopia', cca3: 'ETH', capital: 'Addis Ababa', continent: 'Africa', population2022: 114963588, population2020: 114963588, population2015: 105350020, population2010: 89237791, population2000: 66224804, population1990: 50974000, population1980: 38040000, population1970: 28931000, area: 1104300, density: 104, growthRate: 2.57, worldPercentage: 1.47, coordinates: [9.1450, 40.4897]},
+                {name: 'Philippines', cca3: 'PHL', capital: 'Manila', continent: 'Asia', population2022: 109581078, population2020: 109581078, population2015: 101716359, population2010: 93444322, population2000: 81159644, population1990: 62413000, population1980: 48317000, population1970: 36684000, area: 300000, density: 365, growthRate: 1.35, worldPercentage: 1.41, coordinates: [12.8797, 121.7740]},
+                {name: 'Egypt', cca3: 'EGY', capital: 'Cairo', continent: 'Africa', population2022: 102334404, population2020: 102334404, population2015: 92442547, population2010: 82761335, population2000: 69536644, population1990: 56694000, population1980: 44928000, population1970: 35620000, area: 1001450, density: 102, growthRate: 1.94, worldPercentage: 1.31, coordinates: [26.0975, 30.0444]},
+                {name: 'Vietnam', cca3: 'VNM', capital: 'Hanoi', continent: 'Asia', population2022: 97338579, population2020: 97338579, population2015: 93387974, population2010: 87411013, population2000: 79001710, population1990: 67442000, population1980: 54373000, population1970: 43407000, area: 331210, density: 294, growthRate: 0.91, worldPercentage: 1.25, coordinates: [14.0583, 108.2772]},
+                {name: 'Turkey', cca3: 'TUR', capital: 'Ankara', continent: 'Asia', population2022: 84339067, population2020: 84339067, population2015: 78741053, population2010: 72137546, population2000: 64252135, population1990: 54593000, population1980: 44439000, population1970: 35321000, area: 783562, density: 108, growthRate: 1.09, worldPercentage: 1.08, coordinates: [38.9637, 35.2433]},
+                {name: 'Iran', cca3: 'IRN', capital: 'Tehran', continent: 'Asia', population2022: 83992949, population2020: 83992949, population2015: 79369615, population2010: 74253184, population2000: 66132208, population1990: 56358000, population1980: 39327000, population1970: 28514000, area: 1648195, density: 51, growthRate: 1.30, worldPercentage: 1.08, coordinates: [32.4279, 53.6880]},
+                {name: 'Germany', cca3: 'DEU', capital: 'Berlin', continent: 'Europe', population2022: 83783942, population2020: 83783942, population2015: 81686611, population2010: 81330000, population2000: 82032988, population1990: 79433000, population1980: 78169000, population1970: 78169000, area: 357114, density: 235, growthRate: 0.32, worldPercentage: 1.07, coordinates: [51.1657, 10.4515]},
+                {name: 'Thailand', cca3: 'THA', capital: 'Bangkok', continent: 'Asia', population2022: 69799978, population2020: 69799978, population2015: 68714513, population2010: 67195088, population2000: 63038249, population1990: 55844000, population1980: 47365000, population1970: 36885000, area: 513120, density: 136, growthRate: 0.25, worldPercentage: 0.90, coordinates: [15.8700, 100.9925]},
+                {name: 'United Kingdom', cca3: 'GBR', capital: 'London', continent: 'Europe', population2022: 67886011, population2020: 67886011, population2015: 65128861, population2010: 62348447, population2000: 58893361, population1990: 57411000, population1980: 56330000, population1970: 55663000, area: 242495, density: 280, growthRate: 0.53, worldPercentage: 0.87, coordinates: [55.3781, -3.4360]},
+                {name: 'France', cca3: 'FRA', capital: 'Paris', continent: 'Europe', population2022: 65273511, population2020: 65273511, population2015: 64395345, population2010: 62787427, population2000: 59278000, population1990: 56709000, population1980: 53880000, population1970: 50772000, area: 551695, density: 118, growthRate: 0.22, worldPercentage: 0.84, coordinates: [46.6034, 1.8883]},
+                {name: 'Italy', cca3: 'ITA', capital: 'Rome', continent: 'Europe', population2022: 60461826, population2020: 60461826, population2015: 59798000, population2010: 58091681, population2000: 56924521, population1990: 56719000, population1980: 56388000, population1970: 53661000, area: 301336, density: 201, growthRate: -0.15, worldPercentage: 0.78, coordinates: [41.8719, 12.5674]},
+                {name: 'South Africa', cca3: 'ZAF', capital: 'Cape Town', continent: 'Africa', population2022: 59308690, population2020: 59308690, population2015: 55386367, population2010: 51216964, population2000: 45064270, population1990: 36793000, population1980: 29077000, population1970: 22505000, area: 1221037, density: 49, growthRate: 1.28, worldPercentage: 0.76, coordinates: [-30.5595, 22.9375]},
+                {name: 'South Korea', cca3: 'KOR', capital: 'Seoul', continent: 'Asia', population2022: 51269185, population2020: 51269185, population2015: 50617045, population2010: 48184000, population2000: 47008111, population1990: 42869000, population1980: 38124000, population1970: 32241000, area: 100210, density: 512, growthRate: 0.09, worldPercentage: 0.66, coordinates: [35.9078, 127.7669]},
+                {name: 'Colombia', cca3: 'COL', capital: 'Bogotá', continent: 'South America', population2022: 50882891, population2020: 50882891, population2015: 47119728, population2010: 44205293, population2000: 40283000, population1990: 35886000, population1980: 27837000, population1970: 21360000, area: 1141748, density: 45, growthRate: 1.08, worldPercentage: 0.65, coordinates: [4.5709, -74.2973]},
+                {name: 'Spain', cca3: 'ESP', capital: 'Madrid', continent: 'Europe', population2022: 46754778, population2020: 46754778, population2015: 46122000, population2010: 46577000, population2000: 40499791, population1990: 38851000, population1980: 37386000, population1970: 33956000, area: 505992, density: 92, growthRate: 0.04, worldPercentage: 0.60, coordinates: [40.4637, -3.7492]},
+                {name: 'Argentina', cca3: 'ARG', capital: 'Buenos Aires', continent: 'South America', population2022: 45195774, population2020: 45195774, population2015: 43417765, population2010: 41343201, population2000: 37032000, population1990: 32616000, population1980: 28094000, population1970: 23962000, area: 2780400, density: 16, growthRate: 0.93, worldPercentage: 0.58, coordinates: [-38.4161, -63.6167]},
+                {name: 'Canada', cca3: 'CAN', capital: 'Ottawa', continent: 'North America', population2022: 37742154, population2020: 37742154, population2015: 35702707, population2010: 33759742, population2000: 30769000, population1990: 27791000, population1980: 24593000, population1970: 21568000, area: 9984670, density: 4, growthRate: 0.89, worldPercentage: 0.48, coordinates: [56.1304, -106.3468]},
+                {name: 'Australia', cca3: 'AUS', capital: 'Canberra', continent: 'Oceania', population2022: 25499884, population2020: 25499884, population2015: 23815995, population2010: 22031750, population2000: 19153000, population1990: 17065000, population1980: 14695000, population1970: 12507000, area: 7692024, density: 3, growthRate: 1.18, worldPercentage: 0.33, coordinates: [-25.2744, 133.7751]}
+            ];
+
+            setTimeout(() => {
+                try {
+                    processCSVData();
+                    updateDataStatus(`✅ Loaded ${csvData.length} sample countries`);
+                    document.getElementById('totalCountriesHeader').textContent = `${csvData.length} Countries`;
+                    showNotification('Sample data loaded successfully! Click "Update Map" to visualize.', 'success');
+                } catch (error) {
+                    console.error('Error loading sample data:', error);
+                    showNotification('Error loading sample data', 'error');
+                } finally {
+                    showLoading(false);
+                }
+            }, 1000);
+        }
+
+        // Handle File Upload
+        function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (file) {
+                handleFile(file);
+            }
+        }
+
+        // Handle File Processing
+        function handleFile(file) {
+            if (!file.name.endsWith('.csv')) {
+                showNotification('Please upload a CSV file', 'error');
+                return;
+            }
+
+            showLoading(true, 'Reading CSV File...', 'Parsing population data from your file');
+
+            Papa.parse(file, {
+                header: true,
+                dynamicTyping: true,
+                skipEmptyLines: true,
+                complete: function(results) {
+                    try {
+                        if (results.errors.length > 0) {
+                            console.warn('CSV parsing warnings:', results.errors);
+                        }
+
+                        csvData = results.data;
+                        
+                        if (!validateCSVStructure(csvData)) {
+                            throw new Error('CSV file missing required columns');
+                        }
+
+                        processCSVData();
+                        updateDataStatus(`✅ Loaded ${csvData.length} countries from CSV`);
+                        document.getElementById('totalCountriesHeader').textContent = `${csvData.length} Countries`;
+                        showNotification(`Successfully loaded ${csvData.length} countries!`, 'success');
+                        
+                    } catch (error) {
+                        console.error('Error processing CSV:', error);
+                        showNotification('Error processing CSV: ' + error.message, 'error');
+                    } finally {
+                        showLoading(false);
+                    }
+                },
+                error: function(error) {
+                    console.error('CSV parsing error:', error);
+                    showNotification('Error reading CSV file', 'error');
+                    showLoading(false);
+                }
+            });
+        }
+
+        // Validate CSV Structure
+        function validateCSVStructure(data) {
+            if (data.length === 0) return false;
+            
+            const requiredColumns = ['Country/Territory', '2022 Population', 'Density (per km²)', 'Area (km²)', 'Continent'];
+            const firstRow = data[0];
+            
+            for (const column of requiredColumns) {
+                if (!(column in firstRow)) {
+                    console.error(`Missing required column: ${column}`);
+                    return false;
+                }
+            }
+            
+            return true;
+        }
+
+        // Process CSV Data
+        function processCSVData() {
+            csvData = csvData.map(row => {
+                const countryName = row['Country/Territory'] || row.name || '';
+                
+                return {
+                    name: countryName,
+                    cca3: row['CCA3'] || row.cca3 || '',
+                    capital: row['Capital'] || row.capital || '',
+                    continent: row['Continent'] || row.continent || '',
+                    population2022: parseInt(row['2022 Population']) || row.population2022 || 0,
+                    population2020: parseInt(row['2020 Population']) || row.population2020 || 0,
+                    population2015: parseInt(row['2015 Population']) || row.population2015 || 0,
+                    population2010: parseInt(row['2010 Population']) || row.population2010 || 0,
+                    population2000: parseInt(row['2000 Population']) || row.population2000 || 0,
+                    population1990: parseInt(row['1990 Population']) || row.population1990 || 0,
+                    population1980: parseInt(row['1980 Population']) || row.population1980 || 0,
+                    population1970: parseInt(row['1970 Population']) || row.population1970 || 0,
+                    area: parseInt(row['Area (km²)']) || row.area || 1,
+                    density: parseFloat(row['Density (per km²)']) || row.density || 0,
+                    growthRate: parseFloat(row['Growth Rate']) || row.growthRate || 0,
+                    worldPercentage: parseFloat(row['World Population Percentage']) || row.worldPercentage || 0,
+                    coordinates: row.coordinates || getCountryCoordinates(countryName)
+                };
+            }).filter(country => country.name && country.coordinates);
+
+            console.log(`Processed ${csvData.length} countries with data`);
+
+            // Reset filters to default values
+            document.getElementById('populationThreshold').value = '0';
+            document.getElementById('densityThreshold').value = '0';
+            document.getElementById('populationYear').value = '2022';
+            document.getElementById('continentFilter').value = 'all';
+
+            updateThresholdDisplay('population', '0');
+            updateThresholdDisplay('density', '0');
+            updateGlobalStatistics();
+            updateFilterSummary();
+            
+            showNotification('Data loaded! Click "Update Map" to visualize.', 'info');
+        }
+
+        // Get Country Coordinates
+        function getCountryCoordinates(countryName) {
+            if (defaultCoordinates[countryName]) {
+                return defaultCoordinates[countryName];
+            }
+            
+            for (const [name, coords] of Object.entries(defaultCoordinates)) {
+                if (name.toLowerCase().includes(countryName.toLowerCase()) || 
+                    countryName.toLowerCase().includes(name.toLowerCase())) {
+                    return coords;
+                }
+            }
+            
+            console.warn(`No coordinates found for: ${countryName}`);
+            return null;
+        }
+
+        // Get Population for Year
+        function getPopulationForYear(country, year) {
+            switch(year) {
+                case '2022': return country.population2022 || 0;
+                case '2020': return country.population2020 || 0;
+                case '2015': return country.population2015 || 0;
+                case '2010': return country.population2010 || 0;
+                case '2000': return country.population2000 || 0;
+                case '1990': return country.population1990 || 0;
+                case '1980': return country.population1980 || 0;
+                case '1970': return country.population1970 || 0;
+                default: return country.population2022 || 0;
+            }
+        }
+
+        // MAIN UPDATE FUNCTION
+        function updateMapVisualization() {
+            if (csvData.length === 0) {
+                showNotification('Please load data first!', 'warning');
+                return;
+            }
+
+            try {
+                showLoading(true, 'Updating Map...', 'Applying filters and updating visualization');
+                
+                setTimeout(() => {
+                    applyFilters();
+                    clearLayers();
+                    createVisualization();
+                    updateStatistics();
+                    updateLegend();
+                    updateFilterSummary();
+                    
+                    showLoading(false);
+                    showNotification(`Map updated! Showing ${filteredData.length} countries.`, 'success');
+                }, 500);
+                
+            } catch (error) {
+                console.error('Error updating visualization:', error);
+                showNotification('Error updating map: ' + error.message, 'error');
+                showLoading(false);
+            }
+        }
+
+        // Apply Filters
+        function applyFilters() {
+            const continentFilter = document.getElementById('continentFilter').value;
+            const year = document.getElementById('populationYear').value;
+            const populationThreshold = parseInt(document.getElementById('populationThreshold').value);
+            const densityThreshold = parseInt(document.getElementById('densityThreshold').value);
+            
+            filteredData = csvData.filter(country => {
+                if (continentFilter !== 'all' && country.continent !== continentFilter) {
+                    return false;
+                }
+                
+                const population = getPopulationForYear(country, year);
+                if (population < populationThreshold) {
+                    return false;
+                }
+                
+                if (country.density < densityThreshold) {
+                    return false;
+                }
+                
+                return true;
+            });
+            
+            console.log(`Filtered data: ${filteredData.length} countries from ${csvData.length} total`);
+        }
+
+        // Clear Layers
+        function clearLayers() {
+            if (populationLayer) {
+                map.removeLayer(populationLayer);
+            }
+            markers.clearLayers();
+        }
+
+        // Create Visualization
+        function createVisualization() {
+            populationLayer = L.layerGroup();
+            
+            const colorScheme = document.getElementById('colorScheme').value;
+            const sizeMultiplier = parseFloat(document.getElementById('sizeMultiplier').value);
+            const opacity = parseFloat(document.getElementById('opacitySlider').value);
+            const year = document.getElementById('populationYear').value;
+            
+            filteredData.forEach(country => {
+                if (!country.coordinates) return;
+                
+                const population = getPopulationForYear(country, year);
+                const value = getVisualizationValue(country, colorScheme, population);
+                const color = getColor(value, colorScheme);
+                const radius = calculateRadius(population, sizeMultiplier);
+                
+                const circle = L.circleMarker(country.coordinates, {
+                    radius: radius,
+                    fillColor: color,
+                    color: '#ffffff',
+                    weight: 2,
+                    opacity: opacity,
+                    fillOpacity: opacity * 0.8
+                });
+                
+                circle.bindPopup(createPopupContent(country, population, year));
+                
+                circle.on('click', () => {
+                    updateSelectedCountry(country.name);
+                    showNotification(`Selected: ${country.name}`, 'info');
+                });
+                
+                circle.addTo(populationLayer);
+            });
+            
+            populationLayer.addTo(map);
+        }
+
+        // Get Visualization Value
+        function getVisualizationValue(country, scheme, population) {
+            switch(scheme) {
+                case 'density': return country.density;
+                case 'population': return population;
+                case 'growth': return country.growthRate;
+                case 'area': return country.area;
+                default: return country.density;
+            }
+        }
+
+        // Get Color based on scheme
+        function getColor(value, scheme) {
+            const colors = colorPalettes[scheme] || colorPalettes.density;
+            let thresholds;
+            
+            switch(scheme) {
+                case 'density':
+                    thresholds = [0, 25, 50, 100, 250, 500];
+                    break;
+                case 'population':
+                    thresholds = [0, 1000000, 10000000, 50000000, 100000000, 500000000];
+                    break;
+                case 'growth':
+                    thresholds = [-2, -0.5, 0, 1, 2, 4];
+                    break;
+                case 'area':
+                    thresholds = [0, 50000, 200000, 500000, 1000000, 5000000];
+                    break;
+                default:
+                    thresholds = [0, 25, 50, 100, 250, 500];
+            }
+            
+            for (let i = 0; i < thresholds.length - 1; i++) {
+                if (value >= thresholds[i] && value < thresholds[i + 1]) {
+                    return colors[i] || colors[colors.length - 1];
+                }
+            }
+            
+            return colors[colors.length - 1];
+        }
+
+        // Calculate Radius
+        function calculateRadius(population, multiplier) {
+            const baseRadius = Math.log10(Math.max(population, 1000)) * 2;
+            return Math.max(Math.min(baseRadius * multiplier, 50), 4);
+        }
+
+        // Create Popup Content
+        function createPopupContent(country, population, year) {
+            return `
+                <div class="custom-popup">
+                    <div class="popup-header">${country.name}</div>
+                    <div class="popup-content">
+                        <p><strong>🏛️ Capital:</strong> ${country.capital}</p>
+                        <p><strong>🌍 Continent:</strong> ${country.continent}</p>
+                        <p><strong>👥 Population (${year}):</strong> ${population.toLocaleString()}</p>
+                        <p><strong>📏 Area:</strong> ${country.area.toLocaleString()} km²</p>
+                        <p><strong>🏘️ Density:</strong> ${country.density.toLocaleString()} per km²</p>
+                        <p><strong>📈 Growth Rate:</strong> ${country.growthRate > 0 ? '+' : ''}${country.growthRate}%</p>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Update Statistics
+        function updateStatistics() {
+            try {
+                const year = document.getElementById('populationYear').value;
+                const totalCountries = csvData.length;
+                const displayedCountries = filteredData.length;
+                const totalPopulation = filteredData.reduce((sum, country) => 
+                    sum + getPopulationForYear(country, year), 0);
+                const avgDensity = filteredData.length > 0 ? 
+                    Math.round(filteredData.reduce((sum, country) => sum + country.density, 0) / filteredData.length) : 0;
+                const maxDensity = filteredData.length > 0 ? 
+                    Math.max(...filteredData.map(country => country.density)) : 0;
+                
+                document.getElementById('totalCountries').textContent = totalCountries;
+                document.getElementById('displayedCountries').textContent = displayedCountries;
+                document.getElementById('totalPopulation').textContent = totalPopulation.toLocaleString();
+                document.getElementById('avgDensity').textContent = avgDensity.toLocaleString() + ' /km²';
+                document.getElementById('maxDensity').textContent = maxDensity.toLocaleString() + ' /km²';
+            } catch (error) {
+                console.error('Error updating statistics:', error);
+            }
+        }
+
+        // Update Legend
+        function updateLegend() {
+            try {
+                const scheme = document.getElementById('colorScheme').value;
+                const colors = colorPalettes[scheme] || colorPalettes.density;
+                
+                let ranges, title;
+                switch(scheme) {
+                    case 'density':
+                        ranges = ['0-25', '25-50', '50-100', '100-250', '250-500', '500+'];
+                        title = 'Population Density (per km²)';
+                        break;
+                    case 'population':
+                        ranges = ['0-1M', '1M-10M', '10M-50M', '50M-100M', '100M-500M', '500M+'];
+                        title = 'Total Population';
+                        break;
+                    case 'growth':
+                        ranges = ['< -0.5%', '-0.5-0%', '0-1%', '1-2%', '2-4%', '4%+'];
+                        title = 'Growth Rate';
+                        break;
+                    case 'area':
+                        ranges = ['0-50K', '50K-200K', '200K-500K', '500K-1M', '1M-5M', '5M+'];
+                        title = 'Country Area (km²)';
+                        break;
+                    default:
+                        ranges = ['0-25', '25-50', '50-100', '100-250', '250-500', '500+'];
+                        title = 'Population Density (per km²)';
+                }
+                
+                document.getElementById('legendTitle').textContent = title;
+                const legendContent = document.getElementById('legendContent');
+                legendContent.innerHTML = '';
+                
+                colors.forEach((color, index) => {
+                    if (index < ranges.length) {
+                        const item = document.createElement('div');
+                        item.className = 'legend-item';
+                        item.innerHTML = `
+                            <div class="legend-color" style="background-color: ${color}"></div>
+                            <span>${ranges[index]}</span>
+                        `;
+                        legendContent.appendChild(item);
+                    }
+                });
+            } catch (error) {
+                console.error('Error updating legend:', error);
+            }
+        }
+
+        // Update Global Statistics
+        function updateGlobalStatistics() {
+            if (csvData.length === 0) {
+                document.getElementById('totalCountries').textContent = '0';
+                document.getElementById('displayedCountries').textContent = '0';
+                document.getElementById('totalPopulation').textContent = '0';
+                document.getElementById('avgDensity').textContent = '0 /km²';
+                document.getElementById('maxDensity').textContent = '0 /km²';
+                return;
+            }
+            
+            const totalPopulation = csvData.reduce((sum, country) => sum + country.population2022, 0);
+            const avgDensity = Math.round(csvData.reduce((sum, country) => sum + country.density, 0) / csvData.length);
+            const maxDensity = Math.max(...csvData.map(country => country.density));
+            
+            document.getElementById('totalCountries').textContent = csvData.length;
+            document.getElementById('displayedCountries').textContent = '0';
+            document.getElementById('totalPopulation').textContent = totalPopulation.toLocaleString();
+            document.getElementById('avgDensity').textContent = avgDensity.toLocaleString() + ' /km²';
+            document.getElementById('maxDensity').textContent = maxDensity.toLocaleString() + ' /km²';
+        }
+
+        // Update Selected Country
+        function updateSelectedCountry(name) {
+            document.getElementById('selectedCountry').textContent = name;
+        }
+
+        // Update Data Status
+        function updateDataStatus(message) {
+            const statusEl = document.getElementById('dataStatus');
+            statusEl.textContent = message;
+            statusEl.style.background = '#d1fae5';
+            statusEl.style.color = '#065f46';
+            statusEl.style.borderLeftColor = 'var(--success-color)';
+        }
+
+        // Update Threshold Display
+        function updateThresholdDisplay(type, value) {
+            if (type === 'population') {
+                const millions = Math.round(value / 1000000);
+                document.getElementById('populationThresholdValue').textContent = millions + 'M';
+                
+                if (csvData.length > 0) {
+                    const year = document.getElementById('populationYear').value;
+                    const count = csvData.filter(country => getPopulationForYear(country, year) >= parseInt(value)).length;
+                    // Update count display if element exists
+                }
+            } else if (type === 'density') {
+                document.getElementById('densityThresholdValue').textContent = value;
+                
+                if (csvData.length > 0) {
+                    const count = csvData.filter(country => country.density >= parseInt(value)).length;
+                    // Update count display if element exists
+                }
+            }
+        }
+
+        // Update Filter Summary
+        function updateFilterSummary() {
+            const continent = document.getElementById('continentFilter').value;
+            const year = document.getElementById('populationYear').value;
+            const populationThreshold = parseInt(document.getElementById('populationThreshold').value);
+            const densityThreshold = parseInt(document.getElementById('densityThreshold').value);
+            const colorScheme = document.getElementById('colorScheme').value;
+            
+            const filterTags = document.getElementById('filterTags');
+            filterTags.innerHTML = '';
+            
+            // Continent filter
+            const continentTag = document.createElement('span');
+            continentTag.className = 'filter-tag active';
+            continentTag.textContent = continent === 'all' ? 'All Continents' : continent;
+            filterTags.appendChild(continentTag);
+            
+            // Year filter
+            const yearTag = document.createElement('span');
+            yearTag.className = 'filter-tag active';
+            yearTag.textContent = `Year: ${year}`;
+            filterTags.appendChild(yearTag);
+            
+            // Population threshold
+            const popTag = document.createElement('span');
+            popTag.className = populationThreshold > 0 ? 'filter-tag active' : 'filter-tag';
+            popTag.textContent = populationThreshold > 0 ? `Pop: ${Math.round(populationThreshold/1000000)}M+` : 'Population: All';
+            filterTags.appendChild(popTag);
+            
+            // Density threshold
+            const densityTag = document.createElement('span');
+            densityTag.className = densityThreshold > 0 ? 'filter-tag active' : 'filter-tag';
+            densityTag.textContent = densityThreshold > 0 ? `Density: ${densityThreshold}+` : 'Density: All';
+            filterTags.appendChild(densityTag);
+
+            // Color scheme
+            const colorTag = document.createElement('span');
+            colorTag.className = 'filter-tag active';
+            const colorSchemeNames = {
+                'density': 'Density Colors',
+                'population': 'Population Colors',
+                'growth': 'Growth Colors',
+                'area': 'Area Colors'
+            };
+            colorTag.textContent = colorSchemeNames[colorScheme] || 'Default Colors';
+            filterTags.appendChild(colorTag);
+        }
+
+        // Country Search Functionality
+        function handleCountrySearch(searchTerm) {
+            const suggestionsDiv = document.getElementById('searchSuggestions');
+            
+            if (!searchTerm.trim() || csvData.length === 0) {
+                suggestionsDiv.style.display = 'none';
+                return;
+            }
+
+            const matches = csvData.filter(country => 
+                country.name.toLowerCase().includes(searchTerm.toLowerCase())
+            ).slice(0, 5);
+
+            if (matches.length === 0) {
+                suggestionsDiv.style.display = 'none';
+                return;
+            }
+
+            suggestionsDiv.innerHTML = matches.map(country => `
+                <div class="search-suggestion-item" onclick="selectCountry('${country.name}')" style="
+                    padding: 12px 15px;
+                    cursor: pointer;
+                    border-bottom: 1px solid #f1f5f9;
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    transition: background-color 0.2s ease;
+                ">
+                    <span style="font-size: 16px;">🌍</span>
+                    <div style="flex: 1;">
+                        <div style="font-weight: 600;">${country.name}</div>
+                        <div style="font-size: 12px; color: var(--text-secondary);">${country.continent} • Pop: ${country.population2022.toLocaleString()}</div>
+                    </div>
+                </div>
+            `).join('');
+
+            suggestionsDiv.style.display = 'block';
+        }
+
+        // Select Country from Search
+        function selectCountry(countryName) {
+            document.getElementById('countrySearch').value = countryName;
+            document.getElementById('searchSuggestions').style.display = 'none';
+            
+            const country = csvData.find(c => c.name === countryName);
+            if (country && country.coordinates) {
+                map.setView(country.coordinates, 6);
+                updateSelectedCountry(countryName);
+                showNotification(`Zoomed to ${countryName}`, 'info');
+            }
+        }
+
+        // Clear Search
+        function clearSearch() {
+            document.getElementById('countrySearch').value = '';
+            document.getElementById('searchSuggestions').style.display = 'none';
+            document.getElementById('selectedCountry').textContent = 'None';
+            map.setView([20, 0], 2);
+            showNotification('Search cleared', 'info');
+        }
+
+        // Reset All Filters
+        function resetAllFilters() {
+            document.getElementById('continentFilter').value = 'all';
+            document.getElementById('populationYear').value = '2022';
+            document.getElementById('populationThreshold').value = '0';
+            document.getElementById('densityThreshold').value = '0';
+            document.getElementById('populationThresholdValue').textContent = '0M';
+            document.getElementById('densityThresholdValue').textContent = '0';
+            document.getElementById('colorScheme').value = 'density';
+            document.getElementById('sizeMultiplier').value = '1';
+            document.getElementById('opacitySlider').value = '0.7';
+            document.getElementById('sizeValue').textContent = '1.0x';
+            document.getElementById('opacityValue').textContent = '0.7';
+            
+            updateFilterSummary();
+            if (csvData.length > 0) {
+                updateThresholdDisplay('population', '0');
+                updateThresholdDisplay('density', '0');
+            }
+            
+            showNotification('All filters reset!', 'info');
+        }
+
+        // Quick Actions
+        function showMostPopulous() {
+            if (csvData.length === 0) {
+                showNotification('Please load data first!', 'warning');
+                return;
+            }
+            
+            const year = document.getElementById('populationYear').value;
+            const continentFilter = document.getElementById('continentFilter').value;
+            
+            let dataToSort = csvData;
+            if (continentFilter !== 'all') {
+                dataToSort = csvData.filter(country => country.continent === continentFilter);
+            }
+            
+            const topCountries = [...dataToSort]
+                .sort((a, b) => getPopulationForYear(b, year) - getPopulationForYear(a, year))
+                .slice(0, 10);
+            
+            if (topCountries.length > 0) {
+                const bounds = L.latLngBounds(topCountries.map(c => c.coordinates).filter(Boolean));
+                map.fitBounds(bounds, { padding: [20, 20] });
+                
+                const regionText = continentFilter === 'all' ? 'countries' : `countries in ${continentFilter}`;
+                showNotification(`Showing top 10 most populous ${regionText} (${year})`, 'info');
+            }
+        }
+
+        function showHighestDensity() {
+            if (csvData.length === 0) {
+                showNotification('Please load data first!', 'warning');
+                return;
+            }
+            
+            const continentFilter = document.getElementById('continentFilter').value;
+            
+            let dataToSort = csvData;
+            if (continentFilter !== 'all') {
+                dataToSort = csvData.filter(country => country.continent === continentFilter);
+            }
+            
+            const topDensity = [...dataToSort]
+                .sort((a, b) => b.density - a.density)
+                .slice(0, 10);
+            
+            if (topDensity.length > 0) {
+                const bounds = L.latLngBounds(topDensity.map(c => c.coordinates).filter(Boolean));
+                map.fitBounds(bounds, { padding: [20, 20] });
+                
+                const regionText = continentFilter === 'all' ? 'countries' : `countries in ${continentFilter}`;
+                showNotification(`Showing ${regionText} with highest population density`, 'info');
+            }
+        }
+
+        function exportFilteredData() {
+            if (filteredData.length === 0) {
+                showNotification('No data to export!', 'warning');
+                return;
+            }
+            
+            const exportData = {
+                metadata: {
+                    exportDate: new Date().toISOString(),
+                    totalCountries: csvData.length,
+                    filteredCountries: filteredData.length,
+                    filters: {
+                        continent: document.getElementById('continentFilter').value,
+                        year: document.getElementById('populationYear').value,
+                        populationThreshold: document.getElementById('populationThreshold').value,
+                        densityThreshold: document.getElementById('densityThreshold').value,
+                        colorScheme: document.getElementById('colorScheme').value
+                    }
+                },
+                countries: filteredData
+            };
+            
+            const blob = new Blob([JSON.stringify(exportData, null, 2)], {
+                type: 'application/json'
+            });
+            
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `filtered-population-data-${new Date().toISOString().split('T')[0]}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            
+            URL.revokeObjectURL(url);
+            showNotification(`Exported ${filteredData.length} countries!`, 'success');
+        }
+
+        // Panel Toggle
+        function togglePanel() {
+            const panel = document.getElementById('controlPanel');
+            const toggle = document.getElementById('panelToggle');
+            
+            panel.classList.toggle('hidden');
+            
+            if (panel.classList.contains('hidden')) {
+                toggle.innerHTML = '<i class="fas fa-chevron-right"></i>';
+                toggle.title = 'Show Control Panel';
+                showNotification('Control panel hidden', 'info');
+            } else {
+                toggle.innerHTML = '<i class="fas fa-chevron-left"></i>';
+                toggle.title = 'Hide Control Panel';
+                showNotification('Control panel shown', 'info');
+            }
+        }
+
+        // Reset Visual Settings
+        function resetVisualSettings() {
+            // Reset visualization controls
+            document.getElementById('colorScheme').value = 'density';
+            document.getElementById('sizeMultiplier').value = '1';
+            document.getElementById('opacitySlider').value = '0.7';
+            document.getElementById('sizeValue').textContent = '1.0x';
+            document.getElementById('opacityValue').textContent = '0.7';
+            document.getElementById('mapStyle').value = 'osm';
+            
+            // Reset map style
+            changeMapStyle('osm');
+            
+            // Update legend if needed
+            updateLegend();
+            
+            showNotification('Visual settings reset to defaults!', 'info');
+        }
+
+        // Dark Mode Toggle
+        function toggleDarkMode() {
+            const isDark = document.getElementById('darkModeToggle').checked;
+            document.body.classList.toggle('dark-mode', isDark);
+            
+            localStorage.setItem('darkMode', isDark);
+            showNotification(`Switched to ${isDark ? 'dark' : 'light'} mode`, 'info');
+        }
+
+        // Load Dark Mode Preference
+        function loadDarkModePreference() {
+            const isDark = localStorage.getItem('darkMode') === 'true';
+            document.getElementById('darkModeToggle').checked = isDark;
+            document.body.classList.toggle('dark-mode', isDark);
+        }
+
+        // Utility Functions
+        function showLoading(show, title = 'Loading...', message = 'Please wait...') {
+            const overlay = document.getElementById('loadingOverlay');
+            const titleEl = document.getElementById('loadingTitle');
+            const messageEl = document.getElementById('loadingMessage');
+            
+            if (show) {
+                titleEl.textContent = title;
+                messageEl.textContent = message;
+                overlay.style.display = 'flex';
+            } else {
+                overlay.style.display = 'none';
+            }
+        }
+
+        function showNotification(message, type = 'info') {
+            const notification = document.getElementById('notification');
+            const text = document.getElementById('notificationText');
+            
+            text.textContent = message;
+            notification.className = `notification ${type} show`;
+            
+            setTimeout(() => {
+                notification.classList.remove('show');
+            }, 4000);
+        }
+
+        // Initialize app when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            if (typeof L === 'undefined') {
+                console.error('Leaflet library failed to load');
+                showNotification('Map library failed to load. Please refresh the page.', 'error');
+                return;
+            }
+            
+            if (typeof Papa === 'undefined') {
+                console.error('PapaParse library failed to load');
+                showNotification('CSV parsing library failed to load. Please refresh the page.', 'error');
+                return;
+            }
+            
+            initApp();
+        });
+    </script>
+</body>
+</html>
